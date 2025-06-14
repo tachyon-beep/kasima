@@ -1,5 +1,9 @@
 """Run a morphogenetic architecture experiment on the two spirals dataset."""
 
+from clearml import Task
+
+Task.init(project_name="kasima-cifar", task_name="run_experiment")
+
 import json
 import random
 import numpy as np

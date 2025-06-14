@@ -2,3 +2,4 @@ numpy
 scikit-learn
 torch
 torchvision
+clearml>=1.8.4
