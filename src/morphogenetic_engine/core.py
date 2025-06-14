@@ -1,3 +1,9 @@
+"""Seed management and optimisation utilities.
+
+Kasmina germinates the dormant seed with the lowest health signal to maximise
+exploratory capacity.
+"""
+
 import logging
 import threading
 import time
@@ -18,12 +24,28 @@ class SeedManager:
                 cls._instance.lock = threading.Lock()
             return cls._instance
 
-    def register_seed(self, seed_module, seed_id: str):
+    def register_seed(self, seed_module, seed_id: str, buffer_size: int = 100):
         self.seeds[seed_id] = {
             "module": seed_module,
             "status": "dormant",
-            "buffer": deque(maxlen=100),
+            "buffer": deque(maxlen=buffer_size),
+            "lock": threading.Lock(),
         }
+
+    def get_health_signal(self, seed_id: str) -> float:
+        """Return the variance-based health signal of the given seed.
+
+        Access to the underlying buffer is protected by the seed-specific
+        lock to avoid data races when multiple dataloaders operate in
+        parallel.
+        """
+        seed_info = self.seeds.get(seed_id)
+        if seed_info is None:
+            raise KeyError(seed_id)
+        lock = seed_info["lock"]
+        with lock:
+            buf_copy = list(seed_info["buffer"])
+        return seed_info["module"].compute_health_signal(buf_copy)
 
     def request_germination(self, seed_id: str) -> bool:
         with self.lock:
@@ -76,6 +98,12 @@ class KasminaMicro:
         return germinated
 
     def _select_seed(self) -> str | None:
+        """Select the dormant seed with the lowest health signal.
+
+        A lower variance indicates a seed whose activations have become
+        stagnant, so the controller prefers to germinate these first to
+        encourage exploration.
+        """
         best_id = None
         best_signal = float("inf")
         with self.seed_manager.lock:

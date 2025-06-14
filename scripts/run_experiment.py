@@ -78,7 +78,6 @@ def main():
         best_acc = max(best_acc, val_acc)
         print(f'Warm-up Epoch {epoch+1}/{warm_up_epochs} - loss: {val_loss:.4f}, acc: {val_acc:.4f}')
 
-    model._freeze_backbone()
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
     for epoch in range(warm_up_epochs, epochs):

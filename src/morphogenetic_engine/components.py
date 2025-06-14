@@ -1,3 +1,5 @@
+from typing import List
+
 import torch
 from torch import nn
 
@@ -5,7 +7,7 @@ from .core import SeedManager
 
 
 class SentinelSeed(nn.Module):
-    def __init__(self, seed_id: str, dim: int):
+    def __init__(self, seed_id: str, dim: int, buffer_size: int = 100):
         super().__init__()
         self.seed_id = seed_id
         self.child = nn.Sequential(
@@ -17,8 +19,7 @@ class SentinelSeed(nn.Module):
             nn.init.uniform_(p, -1e-3, 1e-3)
             p.requires_grad = False
         self.seed_manager = SeedManager()
-        self.seed_manager.register_seed(self, seed_id)
-        self.seed_manager.seeds[self.seed_id]["lock"] = threading.Lock()
+        self.seed_manager.register_seed(self, seed_id, buffer_size=buffer_size)
 
     def forward(self, x):
         info = self.seed_manager.seeds[self.seed_id]
@@ -38,12 +39,15 @@ class SentinelSeed(nn.Module):
         for p in self.child.parameters():
             p.requires_grad = True
 
-    def get_health_signal(self) -> float:
-        buf = self.seed_manager.seeds[self.seed_id]["buffer"]
+    def compute_health_signal(self, buf: List[torch.Tensor]) -> float:
+        """Return the variance of buffered activations."""
         if not buf:
             return float("inf")
-        data = torch.cat(list(buf), dim=0)
+        data = torch.cat(buf, dim=0)
         return data.var().item()
+
+    def get_health_signal(self) -> float:
+        return self.seed_manager.get_health_signal(self.seed_id)
 
 
 class BaseNet(nn.Module):
@@ -56,6 +60,7 @@ class BaseNet(nn.Module):
         self.act2 = nn.ReLU()
         self.seed2 = SentinelSeed("seed2", hidden_dim)
         self.out = nn.Linear(hidden_dim, 2)
+        self._freeze_backbone()
 
     def forward(self, x):
         x = self.act1(self.fc1(x))
