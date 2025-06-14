@@ -74,10 +74,11 @@ class KasminaMicro:
     def _select_seed(self) -> str | None:
         best_id = None
         best_signal = float("inf")
-        for sid, info in self.seed_manager.seeds.items():
-            if info["status"] == "dormant":
-                signal = info["module"].get_health_signal()
-                if signal < best_signal:
-                    best_signal = signal
-                    best_id = sid
+        with self.seed_manager.lock:
+            for sid, info in self.seed_manager.seeds.items():
+                if info["status"] == "dormant":
+                    signal = info["module"].get_health_signal()
+                    if signal < best_signal:
+                        best_signal = signal
+                        best_id = sid
         return best_id
