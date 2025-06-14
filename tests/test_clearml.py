@@ -8,6 +8,8 @@ sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 
 def test_task_init_called(monkeypatch):
+    monkeypatch.delenv("CLEARML_PROJECT_NAME", raising=False)
+    monkeypatch.delenv("CLEARML_TASK_NAME", raising=False)
     called = {}
 
     def fake_init(project_name, task_name):
