@@ -1,10 +1,14 @@
+"""Seed management and optimisation utilities.
+
+Kasmina germinates the dormant seed with the lowest health signal to maximise
+exploratory capacity.
+"""
+
 import logging
 import threading
 import time
 from collections import deque
 from typing import Dict
-
-import torch
 
 
 class SeedManager:
@@ -25,6 +29,7 @@ class SeedManager:
             "module": seed_module,
             "status": "dormant",
             "buffer": deque(maxlen=buffer_size),
+            "lock": threading.Lock(),
         }
 
     def get_health_signal(self, seed_id: str) -> float:
@@ -37,17 +42,10 @@ class SeedManager:
         seed_info = self.seeds.get(seed_id)
         if seed_info is None:
             raise KeyError(seed_id)
-        lock = seed_info.get("lock")
-        if lock is None:
-            # fall back to global lock if no per-seed lock exists
-            lock = threading.Lock()
-            seed_info["lock"] = lock
+        lock = seed_info["lock"]
         with lock:
             buf_copy = list(seed_info["buffer"])
-        if not buf_copy:
-            return float("inf")
-        data = torch.cat(buf_copy, dim=0)
-        return data.var().item()
+        return seed_info["module"].compute_health_signal(buf_copy)
 
     def request_germination(self, seed_id: str) -> bool:
         with self.lock:

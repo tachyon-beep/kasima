@@ -5,8 +5,8 @@ import torch
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from morphogenetic_engine.components import BaseNet, SentinelSeed
-from morphogenetic_engine.core import SeedManager
+from morphogenetic_engine.components import BaseNet, SentinelSeed  # noqa: E402
+from morphogenetic_engine.core import SeedManager  # noqa: E402
 
 
 def test_backbone_frozen_on_init():
@@ -40,4 +40,3 @@ def test_health_signal_thread_safe():
 
     # call once more to ensure no race after threads complete
     seed.get_health_signal()
-

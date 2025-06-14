@@ -1,9 +1,10 @@
 import os
 import sys
+import threading
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from morphogenetic_engine.core import SeedManager, KasminaMicro
+from morphogenetic_engine.core import SeedManager, KasminaMicro  # noqa: E402
 
 
 class DummySeed:
@@ -40,6 +41,14 @@ def test_register_and_germinate():
     assert seed.germinated
     assert sm.germination_log[-1]["seed_id"] == "s1"
     assert sm.germination_log[-1]["success"] is True
+
+
+def test_register_seed_creates_lock():
+    sm = SeedManager()
+    sm.seeds.clear()
+    dummy = DummySeed("bar")
+    sm.register_seed(dummy, "bar")
+    assert isinstance(sm.seeds["bar"].get("lock"), type(threading.Lock()))
 
 
 def test_kasmina_micro_selects_lowest_signal_seed():

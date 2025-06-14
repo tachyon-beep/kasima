@@ -1,5 +1,4 @@
-import threading
-from collections import deque
+from typing import List
 
 import torch
 from torch import nn
@@ -21,7 +20,6 @@ class SentinelSeed(nn.Module):
             p.requires_grad = False
         self.seed_manager = SeedManager()
         self.seed_manager.register_seed(self, seed_id, buffer_size=buffer_size)
-        self.seed_manager.seeds[self.seed_id]["lock"] = threading.Lock()
 
     def forward(self, x):
         info = self.seed_manager.seeds[self.seed_id]
@@ -40,6 +38,13 @@ class SentinelSeed(nn.Module):
                     nn.init.zeros_(m.bias)
         for p in self.child.parameters():
             p.requires_grad = True
+
+    def compute_health_signal(self, buf: List[torch.Tensor]) -> float:
+        """Return the variance of buffered activations."""
+        if not buf:
+            return float("inf")
+        data = torch.cat(buf, dim=0)
+        return data.var().item()
 
     def get_health_signal(self) -> float:
         return self.seed_manager.get_health_signal(self.seed_id)
