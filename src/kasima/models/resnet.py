@@ -9,7 +9,7 @@ from torch import nn
 from torchvision.models import resnet18 as tv_resnet18
 
 if TYPE_CHECKING:  # pragma: no cover - for type hints
-    from morphogenetic_engine.components import SentinelSeed
+    pass
 
 
 class SeededResNet18(nn.Module):
@@ -18,8 +18,8 @@ class SeededResNet18(nn.Module):
     def __init__(
         self,
         num_classes: int = 10,
-        seed1: Optional[SentinelSeed] = None,
-        seed2: Optional[SentinelSeed] = None,
+        seed1: Optional["SentinelSeed"] = None,
+        seed2: Optional["SentinelSeed"] = None,
     ) -> None:
         super().__init__()
         self.model = tv_resnet18(num_classes=num_classes)
