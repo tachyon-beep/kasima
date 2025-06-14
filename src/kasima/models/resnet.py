@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 import torch
 from torch import nn
 from torchvision.models import resnet18 as tv_resnet18
 
-from morphogenetic_engine.components import SentinelSeed
+if TYPE_CHECKING:  # pragma: no cover - for type hints
+    from morphogenetic_engine.components import SentinelSeed
 
 
 class SeededResNet18(nn.Module):

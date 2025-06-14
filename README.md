@@ -16,6 +16,7 @@ The code targets **Python 3.12** and relies on the following packages (see
 - `numpy`
 - `scikit-learn`
 - `torch`
+- `torchvision`
 
 For development and testing you may also install the tools listed in
 `requirements-dev.txt` (`pytest`, `black`, `ruff`).
@@ -29,6 +30,12 @@ experiment module from the project root:
 pip install -r requirements.txt
 pip install -e .
 python -m scripts.run_experiment --device cpu --amp
+```
+
+For CIFAR-10/100 runs, pass a Hydra config name:
+
+```bash
+python -m scripts.run_experiment --config-name dataset=cifar10,model=resnet18
 ```
 
 The script prints the randomly selected hyperparameters, training progress, and
