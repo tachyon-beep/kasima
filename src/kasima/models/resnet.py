@@ -8,8 +8,8 @@ import torch
 from torch import nn
 from torchvision.models import resnet18 as tv_resnet18
 
-if TYPE_CHECKING:  # pragma: no cover - for type hints
-    pass
+if TYPE_CHECKING:
+    from morphogenetic_engine.components import SentinelSeed
 
 
 class SeededResNet18(nn.Module):
