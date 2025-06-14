@@ -1,8 +1,11 @@
 """Run a morphogenetic architecture experiment on the two spirals dataset."""
 
+import os
 from clearml import Task
 
-Task.init(project_name="kasima-cifar", task_name="run_experiment")
+project_name = os.getenv("CLEARML_PROJECT_NAME", "kasima-cifar")
+task_name = os.getenv("CLEARML_TASK_NAME", "run_experiment")
+Task.init(project_name=project_name, task_name=task_name)
 
 import json
 import random

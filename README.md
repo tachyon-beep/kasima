@@ -77,7 +77,10 @@ local ClearML Server set the following environment variables:
 export CLEARML__API__API_SERVER=http://localhost:8008
 export CLEARML__API__WEB_SERVER=http://localhost:8080
 export CLEARML__API__FILES_SERVER=http://localhost:8081
+export CLEARML_PROJECT_NAME=kasima-cifar
+export CLEARML_TASK_NAME=two-spirals
 ```
+The last two variables override the default project and task names.
 
 Alternatively copy and edit `clearml.conf`:
 
