@@ -4,6 +4,8 @@ import time
 from collections import deque
 from typing import Dict
 
+import torch
+
 
 class SeedManager:
     _instance = None
@@ -18,12 +20,34 @@ class SeedManager:
                 cls._instance.lock = threading.Lock()
             return cls._instance
 
-    def register_seed(self, seed_module, seed_id: str):
+    def register_seed(self, seed_module, seed_id: str, buffer_size: int = 100):
         self.seeds[seed_id] = {
             "module": seed_module,
             "status": "dormant",
-            "buffer": deque(maxlen=100),
+            "buffer": deque(maxlen=buffer_size),
         }
+
+    def get_health_signal(self, seed_id: str) -> float:
+        """Return the variance-based health signal of the given seed.
+
+        Access to the underlying buffer is protected by the seed-specific
+        lock to avoid data races when multiple dataloaders operate in
+        parallel.
+        """
+        seed_info = self.seeds.get(seed_id)
+        if seed_info is None:
+            raise KeyError(seed_id)
+        lock = seed_info.get("lock")
+        if lock is None:
+            # fall back to global lock if no per-seed lock exists
+            lock = threading.Lock()
+            seed_info["lock"] = lock
+        with lock:
+            buf_copy = list(seed_info["buffer"])
+        if not buf_copy:
+            return float("inf")
+        data = torch.cat(buf_copy, dim=0)
+        return data.var().item()
 
     def request_germination(self, seed_id: str) -> bool:
         with self.lock:
@@ -76,6 +100,12 @@ class KasminaMicro:
         return germinated
 
     def _select_seed(self) -> str | None:
+        """Select the dormant seed with the lowest health signal.
+
+        A lower variance indicates a seed whose activations have become
+        stagnant, so the controller prefers to germinate these first to
+        encourage exploration.
+        """
         best_id = None
         best_signal = float("inf")
         with self.seed_manager.lock:

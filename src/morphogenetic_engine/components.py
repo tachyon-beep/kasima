@@ -1,3 +1,6 @@
+import threading
+from collections import deque
+
 import torch
 from torch import nn
 
@@ -5,7 +8,7 @@ from .core import SeedManager
 
 
 class SentinelSeed(nn.Module):
-    def __init__(self, seed_id: str, dim: int):
+    def __init__(self, seed_id: str, dim: int, buffer_size: int = 100):
         super().__init__()
         self.seed_id = seed_id
         self.child = nn.Sequential(
@@ -17,7 +20,7 @@ class SentinelSeed(nn.Module):
             nn.init.uniform_(p, -1e-3, 1e-3)
             p.requires_grad = False
         self.seed_manager = SeedManager()
-        self.seed_manager.register_seed(self, seed_id)
+        self.seed_manager.register_seed(self, seed_id, buffer_size=buffer_size)
         self.seed_manager.seeds[self.seed_id]["lock"] = threading.Lock()
 
     def forward(self, x):
@@ -39,11 +42,7 @@ class SentinelSeed(nn.Module):
             p.requires_grad = True
 
     def get_health_signal(self) -> float:
-        buf = self.seed_manager.seeds[self.seed_id]["buffer"]
-        if not buf:
-            return float("inf")
-        data = torch.cat(list(buf), dim=0)
-        return data.var().item()
+        return self.seed_manager.get_health_signal(self.seed_id)
 
 
 class BaseNet(nn.Module):
@@ -56,6 +55,7 @@ class BaseNet(nn.Module):
         self.act2 = nn.ReLU()
         self.seed2 = SentinelSeed("seed2", hidden_dim)
         self.out = nn.Linear(hidden_dim, 2)
+        self._freeze_backbone()
 
     def forward(self, x):
         x = self.act1(self.fc1(x))
