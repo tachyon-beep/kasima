@@ -21,7 +21,9 @@ The code targets **Python 3.12** and relies on the following packages (see
 For development and testing you may also install the tools listed in
 `requirements-dev.txt` (`pytest`, `black`, `ruff`).
 
-## Running the experiment
+## Usage
+
+### Running the experiment
 
 Install the requirements and install the package in editable mode, then run the
 experiment module from the project root:
@@ -55,3 +57,30 @@ To verify a germination log, use the ``kaslog`` tool:
 ```bash
 python -m kaslog verify germination.jsonl
 ```
+
+### Docker
+
+The project ships with a `Dockerfile` and `docker-compose.yml`. Build and run
+the experiment in a container with:
+
+```bash
+docker compose up
+```
+
+The compose service runs `python -m scripts.run_experiment --device cpu --amp` by
+default. Edit `docker-compose.yml` to pass additional arguments if needed.
+
+
+### Experiment Tracking with ClearML
+
+The experiment automatically logs to a local ClearML Server. Set the following
+environment variables to override the defaults:
+
+```bash
+export CLEARML__API__API_SERVER=http://localhost:8008
+export CLEARML__API__WEB_SERVER=http://localhost:8080
+export CLEARML__API__FILES_SERVER=http://localhost:8081
+```
+
+A minimal fallback configuration is provided in `conf/clearml.conf`. Once the
+server is running, open the UI at `http://localhost:8080` to inspect your runs.
