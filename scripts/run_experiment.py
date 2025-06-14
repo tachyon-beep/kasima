@@ -1,7 +1,6 @@
 """Run a morphogenetic architecture experiment on the two spirals dataset."""
 
 import os
-from clearml import Task
 
 project_name = os.getenv("CLEARML_PROJECT_NAME", "kasima-cifar")
 task_name = os.getenv("CLEARML_TASK_NAME", "run_experiment")
