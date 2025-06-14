@@ -18,11 +18,13 @@ class SentinelSeed(nn.Module):
             p.requires_grad = False
         self.seed_manager = SeedManager()
         self.seed_manager.register_seed(self, seed_id)
+        self.seed_manager.seeds[self.seed_id]["lock"] = threading.Lock()
 
     def forward(self, x):
         info = self.seed_manager.seeds[self.seed_id]
         if info["status"] != "active":
-            info["buffer"].append(x.detach())
+            with info["lock"]:
+                info["buffer"].append(x.detach())
             return x
         residual = self.child(x)
         return x + residual
