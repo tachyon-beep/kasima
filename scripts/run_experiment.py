@@ -1,6 +1,4 @@
-import os
-import sys
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
+"""Run a morphogenetic architecture experiment on the two spirals dataset."""
 
 import random
 import numpy as np
