@@ -4,10 +4,13 @@ Kasmina germinates the dormant seed with the lowest health signal to maximise
 exploratory capacity.
 """
 
+import json
 import logging
 import threading
 import time
 from collections import deque
+from hashlib import sha256
+from pathlib import Path
 from typing import Dict
 
 
@@ -15,13 +18,19 @@ class SeedManager:
     _instance = None
     _singleton_lock = threading.Lock()
 
+    seeds: Dict[str, Dict]
+    lock: threading.Lock
+    log_file: Path
+    prev_hash: str
+
     def __new__(cls):
         with cls._singleton_lock:
             if cls._instance is None:
                 cls._instance = super().__new__(cls)
                 cls._instance.seeds: Dict[str, Dict] = {}
-                cls._instance.germination_log = []
                 cls._instance.lock = threading.Lock()
+                cls._instance.log_file = Path("germination.jsonl")
+                cls._instance.prev_hash = ""
             return cls._instance
 
     def register_seed(self, seed_module, seed_id: str, buffer_size: int = 100):
@@ -64,14 +73,17 @@ class SeedManager:
                 self._log_event(seed_id, False)
                 return False
 
-    def _log_event(self, seed_id: str, success: bool):
-        self.germination_log.append(
-            {
-                "seed_id": seed_id,
-                "success": success,
-                "timestamp": time.time(),
-            }
-        )
+    def _log_event(self, seed_id: str, success: bool) -> None:
+        event = {
+            "seed_id": seed_id,
+            "success": success,
+            "timestamp": time.time(),
+        }
+        line = json.dumps(event)
+        new_hash = sha256((self.prev_hash + line).encode()).hexdigest()
+        with self.log_file.open("a", encoding="utf-8") as f:
+            f.write(json.dumps({"event": event, "root": new_hash}) + "\n")
+        self.prev_hash = new_hash
 
 
 class KasminaMicro:
@@ -80,7 +92,7 @@ class KasminaMicro:
         self.patience = patience
         self.delta = delta
         self.plateau = 0
-        self.prev_loss = None
+        self.prev_loss: float | None = None
 
     def step(self, val_loss: float) -> bool:
         germinated = False

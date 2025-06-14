@@ -10,7 +10,7 @@ from morphogenetic_engine.core import SeedManager  # noqa: E402
 
 
 def test_backbone_frozen_on_init():
-    model = BaseNet(hidden_dim=16)
+    model = BaseNet(num_classes=10)
     backbone_params = []
     for name, module in model.named_modules():
         if isinstance(module, SentinelSeed):
