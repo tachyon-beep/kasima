@@ -1,6 +1,8 @@
 import os
 import sys
 import threading
+from pathlib import Path
+import json
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "src"))
 
@@ -30,7 +32,9 @@ def test_register_and_germinate():
     sm = SeedManager()
     # reset state for test isolation
     sm.seeds.clear()
-    sm.germination_log.clear()
+    sm.log_file = Path("test_log.jsonl")
+    sm.log_file.unlink(missing_ok=True)
+    sm.prev_hash = ""
 
     seed = DummySeed("s1")
     sm.register_seed(seed, "s1")
@@ -39,8 +43,9 @@ def test_register_and_germinate():
     assert sm.request_germination("s1") is True
     assert sm.seeds["s1"]["status"] == "active"
     assert seed.germinated
-    assert sm.germination_log[-1]["seed_id"] == "s1"
-    assert sm.germination_log[-1]["success"] is True
+    last = json.loads(sm.log_file.read_text().splitlines()[-1])
+    assert last["event"]["seed_id"] == "s1"
+    assert last["event"]["success"] is True
 
 
 def test_register_seed_creates_lock():
@@ -54,7 +59,9 @@ def test_register_seed_creates_lock():
 def test_kasmina_micro_selects_lowest_signal_seed():
     sm = SeedManager()
     sm.seeds.clear()
-    sm.germination_log.clear()
+    sm.log_file = Path("test_log.jsonl")
+    sm.log_file.unlink(missing_ok=True)
+    sm.prev_hash = ""
 
     seed_low = DummySeed("low", signal=0.1)
     seed_high = DummySeed("high", signal=0.5)
