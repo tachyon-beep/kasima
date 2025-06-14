@@ -55,3 +55,42 @@ To verify a germination log, use the ``kaslog`` tool:
 ```bash
 python -m kaslog verify germination.jsonl
 ```
+
+## Docker
+
+The project ships with a `Dockerfile` and `docker-compose.yml`. Build and run
+the experiment in a container with:
+
+```bash
+docker compose up
+```
+
+The compose service runs `python -m scripts.run_experiment --device cpu --amp` by
+default. Edit `docker-compose.yml` to pass additional arguments if needed.
+
+## Experiment Tracking with ClearML
+
+Every run automatically initialises a ClearML Task. To log your experiments to a
+local ClearML Server set the following environment variables:
+
+```bash
+export CLEARML__API__API_SERVER=http://localhost:8008
+export CLEARML__API__WEB_SERVER=http://localhost:8080
+export CLEARML__API__FILES_SERVER=http://localhost:8081
+export CLEARML_PROJECT_NAME=kasima-cifar
+export CLEARML_TASK_NAME=two-spirals
+```
+The last two variables override the default project and task names.
+
+Alternatively copy and edit `clearml.conf`:
+
+```conf
+api {
+    api_server: http://localhost:8008
+    web_server: http://localhost:8080
+    files_server: http://localhost:8081
+}
+```
+
+Open `http://localhost:8080` in your browser to view the web UI.
+

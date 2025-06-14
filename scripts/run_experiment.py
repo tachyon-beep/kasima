@@ -1,5 +1,10 @@
 """Run a morphogenetic architecture experiment on the two spirals dataset."""
 
+import os
+
+project_name = os.getenv("CLEARML_PROJECT_NAME", "kasima-cifar")
+task_name = os.getenv("CLEARML_TASK_NAME", "run_experiment")
+
 import json
 import random
 import numpy as np
