@@ -34,7 +34,8 @@ class SeedManager:
                 seed_info["status"] = "active"
                 self._log_event(seed_id, True)
                 return True
-            except Exception:
+            except Exception as e:
+                logging.exception(f"Error during germination of seed '{seed_id}': {e}")
                 self._log_event(seed_id, False)
                 return False
 
