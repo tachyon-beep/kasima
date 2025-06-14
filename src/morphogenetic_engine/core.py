@@ -39,7 +39,6 @@ class SeedManager:
                 logging.exception(
                     f"Error during germination of seed '{seed_id}': {e}"
                 )
-                logging.exception(f"Error during germination of seed '{seed_id}': {e}")
                 self._log_event(seed_id, False)
                 return False
 
