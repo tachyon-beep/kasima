@@ -1,20 +1,28 @@
 """Run a morphogenetic architecture experiment on the two spirals dataset."""
-
-import os
-
-project_name = os.getenv("CLEARML_PROJECT_NAME", "kasima-cifar")
-task_name = os.getenv("CLEARML_TASK_NAME", "run_experiment")
+# pylint: disable=missing-function-docstring,too-many-arguments,too-many-locals,
+# pylint: disable=invalid-name,too-many-positional-arguments,import-outside-toplevel,use-dict-literal
 
 import json
+import os
 import random
+
 import numpy as np
 import torch
+from clearml import Task
 from torch import nn
+from torch.cuda.amp import GradScaler, autocast
 from torch.utils.data import DataLoader, TensorDataset
-from torch.cuda.amp import autocast, GradScaler
 
-from morphogenetic_engine.core import SeedManager, KasminaMicro
 from morphogenetic_engine.components import BaseNet
+from morphogenetic_engine.core import KasminaMicro, SeedManager
+
+PROJECT_NAME = os.getenv("CLEARML_PROJECT_NAME", "kasima-cifar")
+TASK_NAME = os.getenv("CLEARML_TASK_NAME", "run_experiment")
+
+# Initialise ClearML task on import so tests can monkeypatch ``Task`` and verify
+# it was called with the expected project and task names.  We keep the ``Task``
+# symbol pointing at ``clearml.Task`` so tests can inspect it.
+_task = Task.init(PROJECT_NAME, TASK_NAME)  # pylint:disable=unused-variable
 
 
 def create_spirals(n_samples=2000, noise=0.2, rotations=2):
@@ -105,7 +113,10 @@ def main():
         train_epoch(model, train_loader, optimizer, criterion, device, use_amp, scaler)
         val_loss, val_acc = evaluate(model, val_loader, criterion, device, use_amp)
         best_acc = max(best_acc, val_acc)
-        print(f'Warm-up Epoch {epoch+1}/{warm_up_epochs} - loss: {val_loss:.4f}, acc: {val_acc:.4f}')
+        print(
+            f'Warm-up Epoch {epoch+1}/{warm_up_epochs} - loss: {val_loss:.4f}, '
+            f'acc: {val_acc:.4f}'
+        )
 
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
