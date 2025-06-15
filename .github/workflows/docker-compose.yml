@@ -29,8 +29,7 @@ jobs:
         run: |
           echo "⏳ Waiting for app to report healthy…"
           for i in {1..30}; do
-            if docker compose exec app \
-                 bash -c "curl -s -f http://localhost:8000/health"; then
+            if docker compose exec -T app bash -c "curl -s -f http://localhost:8000/health"; then
               echo "✅ App is healthy!"
               exit 0
             fi
@@ -40,7 +39,13 @@ jobs:
           exit 1
 
       - name: Run integration tests
-        run: docker compose exec app pytest tests/
+        run: docker compose exec -T app pytest tests/
+
+      - name: Dump Compose logs
+        if: failure()
+        run: |
+          mkdir -p logs
+          docker compose logs > logs/compose.log
 
       - name: Tear down
         if: always()
@@ -51,6 +56,4 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: compose-logs
-          path: |
-            logs/
-            docker-compose.yml
+          path: logs/compose.log
