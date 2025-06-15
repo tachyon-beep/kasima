@@ -1,140 +1,195 @@
-"""Run a morphogenetic architecture experiment on the two spirals dataset."""
-# pylint: disable=missing-function-docstring,too-many-arguments,too-many-locals,
-# pylint: disable=invalid-name,too-many-positional-arguments,import-outside-toplevel,use-dict-literal
+"""Train a seeded ResNet on CIFAR with Kasmina.
 
-import json
+This entrypoint glues together the CIFAR data module, the seeded ResNet
+architecture and the Kasmina controller.  Training progress is logged to
+ClearML and TensorBoard.
+"""
+
+from __future__ import annotations
+
+import argparse
 import os
-import random
+from pathlib import Path
+from typing import Iterable
 
-import numpy as np
 import torch
 from clearml import Task
 from torch import nn
-from torch.cuda.amp import GradScaler, autocast
-from torch.utils.data import DataLoader, TensorDataset
+from torch.utils.tensorboard import SummaryWriter
 
+from kasima.data.cifar import CIFARDataModule
 from morphogenetic_engine.components import BaseNet
 from morphogenetic_engine.core import KasminaMicro, SeedManager
+
 
 PROJECT_NAME = os.getenv("CLEARML_PROJECT_NAME", "kasima-cifar")
 TASK_NAME = os.getenv("CLEARML_TASK_NAME", "run_experiment")
 
-# Initialise ClearML task on import so tests can monkeypatch ``Task`` and verify
-# it was called with the expected project and task names.  We keep the ``Task``
-# symbol pointing at ``clearml.Task`` so tests can inspect it.
-_task = Task.init(PROJECT_NAME, TASK_NAME)  # pylint:disable=unused-variable
+# Allow tests to patch ``Task.init`` on import.
+_task = Task.init(PROJECT_NAME, TASK_NAME)  # pylint: disable=unused-variable
 
 
-def create_spirals(n_samples=2000, noise=0.2, rotations=2):
-    n = np.sqrt(np.random.rand(n_samples // 2)) * rotations * 2 * np.pi
-    d1x = np.cos(n) * n + np.random.rand(n_samples // 2) * noise
-    d1y = np.sin(n) * n + np.random.rand(n_samples // 2) * noise
-    X = np.vstack((
-        np.hstack((d1x, -d1x)),
-        np.hstack((d1y, -d1y)),
-    )).T
-    y = np.hstack((np.zeros(n_samples // 2), np.ones(n_samples // 2)))
-    return X.astype(np.float32), y.astype(np.int64)
+# ---------------------------------------------------------------------------
+# Utility helpers
+# ---------------------------------------------------------------------------
+
+def _env_default(key: str, default: str) -> str:
+    return os.getenv(key, default)
 
 
-def train_epoch(model, loader, opt, crit, device, use_amp, scaler):
-    model.train()
-    for X, y in loader:
-        X = X.to(device)
-        y = y.to(device)
-        opt.zero_grad()
-        with autocast(enabled=use_amp):
-            preds = model(X)
-            loss = crit(preds, y)
-        if any(p.requires_grad for p in model.parameters()):
-            if use_amp:
-                scaler.scale(loss).backward()
-                scaler.step(opt)
-                scaler.update()
-            else:
-                loss.backward()
-                opt.step()
+def _loader_metrics(
+    model: nn.Module,
+    loader: Iterable,
+    device: torch.device,
+    criterion: nn.Module,
+) -> tuple[float, float]:
+    """Return mean loss and accuracy for the given loader."""
 
-
-def evaluate(model, loader, crit, device, use_amp):
     model.eval()
     loss_accum = 0.0
     correct = 0
     total = 0
     with torch.no_grad():
-        for X, y in loader:
-            X = X.to(device)
-            y = y.to(device)
-            with autocast(enabled=use_amp):
-                preds = model(X)
-                loss_accum += crit(preds, y).item()
+        for x_batch, y_batch in loader:
+            x_batch = x_batch.to(device)
+            y_batch = y_batch.to(device)
+            preds = model(x_batch)
+            loss_accum += criterion(preds, y_batch).item()
             pred_labels = preds.argmax(dim=1)
-            correct += (pred_labels == y).sum().item()
-            total += y.size(0)
-    return loss_accum / len(loader), correct / total
+            correct += (pred_labels == y_batch).sum().item()
+            total += y_batch.size(0)
+
+    return loss_accum / max(len(loader), 1), correct / max(total, 1)
 
 
-def main():
-    import argparse
+def _train_epoch(
+    model: nn.Module,
+    loader: Iterable,
+    device: torch.device,
+    criterion: nn.Module,
+    optimiser: torch.optim.Optimizer,
+) -> tuple[float, float]:
+    """Train for a single epoch and return loss and accuracy."""
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--device", default="cpu")
-    parser.add_argument("--amp", action="store_true")
-    args = parser.parse_args()
-    device = torch.device(args.device)
-    use_amp = args.amp and device.type == "cuda"
+    model.train()
+    loss_accum = 0.0
+    correct = 0
+    total = 0
+    for x_batch, y_batch in loader:
+        x_batch = x_batch.to(device)
+        y_batch = y_batch.to(device)
+        optimiser.zero_grad()
+        preds = model(x_batch)
+        loss = criterion(preds, y_batch)
+        if any(p.requires_grad for p in model.parameters()):
+            loss.backward()
+            optimiser.step()
+        loss_accum += loss.item()
+        pred_labels = preds.argmax(dim=1)
+        correct += (pred_labels == y_batch).sum().item()
+        total += y_batch.size(0)
 
-    lr = random.choice([1e-2, 5e-3, 1e-3, 5e-4])
-    patience = random.randint(10, 50)
-    epochs = random.randint(100, 300)
-    hidden_dim = random.choice([64, 128, 256])
-    config = dict(lr=lr, patience=patience, epochs=epochs, hidden_dim=hidden_dim)
-    print('Selected hyperparameters:', config)
+    return loss_accum / max(len(loader), 1), correct / max(total, 1)
 
-    X, y = create_spirals()
-    dataset = TensorDataset(torch.from_numpy(X), torch.from_numpy(y))
-    train_size = int(0.8 * len(dataset))
-    val_size = len(dataset) - train_size
-    train_ds, val_ds = torch.utils.data.random_split(dataset, [train_size, val_size])
-    train_loader = DataLoader(train_ds, batch_size=64, shuffle=True)
-    val_loader = DataLoader(val_ds, batch_size=64)
 
-    scaler = GradScaler(enabled=use_amp)
+# ---------------------------------------------------------------------------
+# Argument parsing
+# ---------------------------------------------------------------------------
 
-    seed_manager = SeedManager()
-    model = BaseNet(hidden_dim).to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Kasmina CIFAR experiment")
+    parser.add_argument("--dataset", choices=["cifar10", "cifar100"], default=_env_default("DATASET", "cifar10"))
+    parser.add_argument("--batch_size", type=int, default=int(_env_default("BATCH_SIZE", "128")))
+    parser.add_argument("--lr", type=float, default=float(_env_default("LR", "0.001")))
+    parser.add_argument("--patience", type=int, default=int(_env_default("PATIENCE", "20")))
+    parser.add_argument("--delta", type=float, default=float(_env_default("DELTA", "0.001")))
+    parser.add_argument("--num_epochs", type=int, default=int(_env_default("NUM_EPOCHS", "10")))
+    parser.add_argument("--device", default=_env_default("DEVICE", "cpu"))
+    parser.add_argument("--log_dir", type=str, default=_env_default("LOG_DIR", "runs"))
+    parser.add_argument("--resume-from", dest="resume_from", type=str, default=None)
+    return parser
+
+
+# ---------------------------------------------------------------------------
+# Main training loop
+# ---------------------------------------------------------------------------
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+
+    writer = SummaryWriter(args.log_dir)
+    Task.current_task().connect(vars(args))
+
+    dm = CIFARDataModule(dataset=args.dataset, batch_size=args.batch_size)
+    dm.setup()
+
+    num_classes = 10 if args.dataset == "cifar10" else 100
+    model = BaseNet(num_classes=num_classes).to(args.device)
+    model._freeze_backbone()
+
+    optimiser = torch.optim.Adam(
+        list(model.seed1.parameters()) + list(model.seed2.parameters()),
+        lr=args.lr,
+    )
+    scheduler = torch.optim.lr_scheduler.LambdaLR(optimiser, lambda _: 1.0)
     criterion = nn.CrossEntropyLoss()
-    kasmina = KasminaMicro(seed_manager, patience=patience, delta=1e-3)
+    seed_manager = SeedManager()
+    kasmina = KasminaMicro(seed_manager, patience=args.patience, delta=args.delta)
 
-    best_acc = 0.0
-    warm_up_epochs = 20
-    for epoch in range(warm_up_epochs):
-        train_epoch(model, train_loader, optimizer, criterion, device, use_amp, scaler)
-        val_loss, val_acc = evaluate(model, val_loader, criterion, device, use_amp)
-        best_acc = max(best_acc, val_acc)
-        print(
-            f'Warm-up Epoch {epoch+1}/{warm_up_epochs} - loss: {val_loss:.4f}, '
-            f'acc: {val_acc:.4f}'
+    start_epoch = 0
+    best_loss = float("inf")
+    ckpt_path = Path(args.log_dir) / "checkpoint.pt"
+    if args.resume_from:
+        data = torch.load(args.resume_from, map_location=args.device)
+        model.load_state_dict(data["model"])
+        optimiser.load_state_dict(data["optimiser"])
+        scheduler.load_state_dict(data["scheduler"])
+        start_epoch = data.get("epoch", 0)
+        best_loss = data.get("best_loss", float("inf"))
+
+    for epoch in range(start_epoch, args.num_epochs):
+        train_loss, train_acc = _train_epoch(
+            model, dm.train_dataloader(), args.device, criterion, optimiser
+        )
+        val_loss, val_acc = _loader_metrics(
+            model, dm.val_dataloader(), args.device, criterion
         )
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+        writer.add_scalar("loss/train", train_loss, epoch)
+        writer.add_scalar("loss/val", val_loss, epoch)
+        writer.add_scalar("acc/train", train_acc, epoch)
+        writer.add_scalar("acc/val", val_acc, epoch)
 
-    for epoch in range(warm_up_epochs, epochs):
-        train_epoch(model, train_loader, optimizer, criterion, device, use_amp, scaler)
-        val_loss, val_acc = evaluate(model, val_loader, criterion, device, use_amp)
-        best_acc = max(best_acc, val_acc)
-        print(f'Epoch {epoch+1}/{epochs} - loss: {val_loss:.4f}, acc: {val_acc:.4f}')
-        if kasmina.step(val_loss):
-            print('Germination occurred! Reinitializing optimizer.')
-            optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+        germinated = kasmina.step(val_loss)
+        if germinated:
+            writer.add_scalar("germination/event", 1, epoch)
+            for sid, info in seed_manager.seeds.items():
+                if info["status"] == "active":
+                    params = torch.cat([
+                        p.detach().view(-1) for p in info["module"].parameters()
+                    ])
+                    writer.add_histogram(f"weights/{sid}", params, epoch)
 
-    print('Best validation accuracy:', best_acc)
-    print('Germination log path:', seed_manager.log_file)
-    if seed_manager.log_file.exists():
-        for line in seed_manager.log_file.read_text().splitlines():
-            print(json.loads(line)["event"])
+        scheduler.step()
+        if val_loss < best_loss or germinated or epoch == args.num_epochs - 1:
+            best_loss = val_loss
+            torch.save(
+                {
+                    "model": model.state_dict(),
+                    "optimiser": optimiser.state_dict(),
+                    "scheduler": scheduler.state_dict(),
+                    "epoch": epoch + 1,
+                    "best_loss": best_loss,
+                },
+                ckpt_path,
+            )
+
+    writer.close()
+    return 0
 
 
-if __name__ == '__main__':
-    main()
+if __name__ == "__main__":
+    raise SystemExit(main())
