@@ -17,6 +17,7 @@ The code targets **Python 3.12** and relies on the following packages (see
 - `scikit-learn`
 - `torch`
 - `torchvision`
+- `tensorboard`
 
 For development and testing you may also install the tools listed in
 `requirements-dev.txt` (`pytest`, `black`, `ruff`).
