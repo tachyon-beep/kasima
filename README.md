@@ -4,9 +4,9 @@ Morphogenetic Architectures experiment demonstrating adaptive network growth.
 
 This project implements a minimal "morphogenetic engine" inspired by the
 Morphogenetic Architectures framework. The accompanying experiment script trains
-a small network on the classic two spirals classification task and explores a
-few hyperparameters to maximise validation accuracy. The library now ships with
-helpers for CIFAR-10/100 experiments and a ResNet backbone.
+a seeded ResNet on CIFAR and explores a few hyperparameters to maximise
+validation accuracy. The library ships with helpers for CIFAR-10/100 experiments
+and a ResNet backbone.
 
 ## Dependencies
 
@@ -24,23 +24,17 @@ For development and testing you may also install the tools listed in
 ## Running the experiment
 
 Install the requirements and install the package in editable mode, then run the
-experiment module from the project root:
+training script from the project root:
 
 ```bash
 pip install -r requirements.txt
 pip install -e .
-python -m scripts.run_experiment --device cpu --amp
+python -m scripts.run_experiment --dataset cifar10 --batch_size 64 \
+    --lr 0.001 --num_epochs 1 --device cpu --log_dir runs/demo
 ```
 
-For CIFAR-10/100 runs, pass a Hydra config name:
-
-```bash
-python -m scripts.run_experiment --config-name dataset=cifar10,model=resnet18
-```
-
-The script prints the randomly selected hyperparameters, training progress, and
-any germination events. A successful run should eventually reach high validation
-accuracy (>0.9). Example tail output:
+The script prints training progress and any germination events. A successful run
+should eventually reach high validation accuracy (>0.9). Example tail output:
 
 ```text
 Epoch 296/296 - loss: 0.0000, acc: 1.0000
@@ -56,6 +50,12 @@ To verify a germination log, use the ``kaslog`` tool:
 python -m kaslog verify germination.jsonl
 ```
 
+Launch TensorBoard to inspect logged metrics:
+
+```bash
+tensorboard --logdir runs/demo
+```
+
 ## Docker
 
 The project ships with a `Dockerfile` and `docker-compose.yml`. Build and run
@@ -65,7 +65,7 @@ the experiment in a container with:
 docker compose up
 ```
 
-The compose service runs `python -m scripts.run_experiment --device cpu --amp` by
+The compose service runs `python -m scripts.run_experiment --dataset cifar10 --device cpu` by
 default. Edit `docker-compose.yml` to pass additional arguments if needed.
 
 ## Experiment Tracking with ClearML
@@ -78,7 +78,7 @@ export CLEARML__API__API_SERVER=http://localhost:8008
 export CLEARML__API__WEB_SERVER=http://localhost:8080
 export CLEARML__API__FILES_SERVER=http://localhost:8081
 export CLEARML_PROJECT_NAME=kasima-cifar
-export CLEARML_TASK_NAME=two-spirals
+export CLEARML_TASK_NAME=run_experiment
 ```
 The last two variables override the default project and task names.
 

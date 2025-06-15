@@ -2,7 +2,7 @@ version: "3.9"
 services:
   app:
     build: .
-    command: python -m scripts.run_experiment --device cpu --amp
+    command: python -m scripts.run_experiment --dataset cifar10 --device cpu
     environment:
       - CLEARML__API__API_SERVER
       - CLEARML__API__WEB_SERVER
